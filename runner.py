@@ -5,7 +5,7 @@ try:
         [
             'scrapy',
             'crawl',
-            'crawl_squad_spider',
+            'extract_match_score',
         ]
     )
 except SystemExit:

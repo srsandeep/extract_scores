@@ -10,5 +10,9 @@ import scrapy
 
 class ExtractScoresItem(scrapy.Item):
     # define the fields for your item here like:
-    # name = scrapy.Field()
-    pass
+    match_type = scrapy.Field()
+    match_date = scrapy.Field()
+    location_info = scrapy.Field()
+    match_scorecard_link = scrapy.Field()
+    match_first_inning_participant = scrapy.Field()
+    match_second_inning_participant = scrapy.Field()
