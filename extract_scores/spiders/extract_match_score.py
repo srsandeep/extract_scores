@@ -27,7 +27,7 @@ class ExtractMatchScoreSpider(CrawlSpider):
         return item
 
     def parse_series_html(self, response):
-        self.logger.info(f'Received YEAR response for the url: {response.url}')
+        self.logger.info(f'Received ALL-YEARS response for the url: {response.url}')
         series_years = response.xpath('//*[@class="season-links"]/a/text()').extract()
         year_links = response.xpath('//*[@class="season-links"]/a/@href').getall()
         url = "http://www.espncricinfo.com"
@@ -41,12 +41,12 @@ class ExtractMatchScoreSpider(CrawlSpider):
         self.logger.info(f'Received YEARLY-SERIES response for the url: {response.url}')
         #TODO: Enhance the logic to include T20 Mens, Tests Mens
         series_categories = response.xpath('//*[@class="match-section-head"]/h2/text()').extract()
-        for each_series_category in series_categories:
-            if each_series_category == 'One-Day Internationls':
-                for each_odi_series_selector in response.xpath('//*[@class="series-summary-wrap"]'):
-                    series_ids = each_odi_series_selector.response.xpath('//*[@class="series-summary-wrap"]')
-                    for each_series_id in series_ids:
-                        yield scrapy.Request(f'www.espncricinfo.com/ci/engine/match/index/series.html?series={each_series_id}', callback=self.parse_bilateral_series)
+        for idx, each_series_category in enumerate(series_categories):
+            if each_series_category == 'One-Day Internationals':
+                odi_selectors = response.xpath('//*[@class="series-summary-wrap"]')[idx]
+                series_ids = odi_selectors.xpath('./section/@data-series-id').extract()
+                for each_series_id in series_ids:
+                    yield scrapy.Request(f'http://www.espncricinfo.com/ci/engine/match/index/series.html?series={each_series_id}', callback=self.parse_bilateral_series)
                 break
 
         # series_ids = response.xpath('//*[@class="series-summary-wrap"]/section/@data-series-id').extract()
