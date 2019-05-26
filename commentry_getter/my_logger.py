@@ -34,4 +34,4 @@ def configure_logger(name, log_path):
     })
     return logging.getLogger(name)
 
-logger = configure_logger('default', '/tmp/playerprofile.log')
+logger = configure_logger('default', '/tmp/extract_match_score.log')

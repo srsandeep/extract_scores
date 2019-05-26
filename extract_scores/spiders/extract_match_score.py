@@ -8,7 +8,10 @@ import pandas as pd
 from scrapy.loader import ItemLoader
 from scrapy.loader.processors import MapCompose, TakeFirst
 import re
-
+from scrapy.spidermiddlewares.httperror import HttpError
+from twisted.internet.error import DNSLookupError
+from twisted.internet.error import TimeoutError, TCPTimedOutError
+from commentry_getter.innings import MatchInfo
 
 class ExtractMatchScoreSpider(CrawlSpider):
     name = 'extract_match_score'
@@ -16,7 +19,18 @@ class ExtractMatchScoreSpider(CrawlSpider):
     def start_requests(self):
         start_urls = ['http://www.espncricinfo.com/ci/engine/series/index.html']
         for url in start_urls:
-            yield scrapy.Request(url=url, callback=self.parse_series_html)
+            yield scrapy.Request(url=url, 
+                                callback=self.parse_series_html, 
+                                errback=self.scrapy_error_callback)
+
+    
+    def scrapy_error_callback(self, failure):
+        self.logger.error(repr(failure))
+
+        if failure.check(HttpError):
+            response = failure.value.response
+            self.logger.error(f'HttpError on {response.url}')
+
 
     def parse_item(self, response):
         item = {}
@@ -25,6 +39,7 @@ class ExtractMatchScoreSpider(CrawlSpider):
         #item['name'] = response.xpath('//div[@id="name"]').get()
         #item['description'] = response.xpath('//div[@id="description"]').get()
         return item
+
 
     def parse_series_html(self, response):
         self.logger.info(f'Received ALL-YEARS response for the url: {response.url}')
@@ -35,10 +50,17 @@ class ExtractMatchScoreSpider(CrawlSpider):
             # TODO: Remove the 2018 if clause after debug
             if series_years[idx] == '2018':
                 self.logger.info(f'Retriving the data for series year: {series_years[idx]} from ' + urllib.parse.urljoin(url, each_link))
-                yield scrapy.Request(urllib.parse.urljoin(url, each_link), callback=self.parse_yearly_series)
+                my_app_metadata = dict()
+                my_app_metadata['series_year'] = series_years[idx]
+                yield scrapy.Request(url=urllib.parse.urljoin(url, each_link), 
+                                    callback=self.parse_yearly_series, 
+                                    errback=self.scrapy_error_callback,
+                                    meta=my_app_metadata)
+
 
     def parse_yearly_series(self, response):
-        self.logger.info(f'Received YEARLY-SERIES response for the url: {response.url}')
+        received_meta_data = response.meta.get('series_year', 'Unknown')
+        self.logger.info(f'Received YEARLY-SERIES for year: {received_meta_data} response for the url: {response.url}')
         #TODO: Enhance the logic to include T20 Mens, Tests Mens
         series_categories = response.xpath('//*[@class="match-section-head"]/h2/text()').extract()
         for idx, each_series_category in enumerate(series_categories):
@@ -46,18 +68,28 @@ class ExtractMatchScoreSpider(CrawlSpider):
                 odi_selectors = response.xpath('//*[@class="series-summary-wrap"]')[idx]
                 series_ids = odi_selectors.xpath('./section/@data-series-id').extract()
                 for each_series_id in series_ids:
-                    yield scrapy.Request(f'http://www.espncricinfo.com/ci/engine/match/index/series.html?series={each_series_id}', callback=self.parse_bilateral_series)
+                    my_app_metadata = dict()
+                    my_app_metadata['series_id'] = each_series_id
+
+                    #TODO Remove the if to get the data of all the series
+                    interested_series_id = '12032'
+                    if each_series_id == interested_series_id:
+                        yield scrapy.Request(url = f'http://www.espncricinfo.com/ci/engine/match/index/series.html?series={each_series_id}', 
+                                            callback=self.parse_bilateral_series,
+                                            errback=self.scrapy_error_callback,
+                                            meta=my_app_metadata)
                 break
 
-        # series_ids = response.xpath('//*[@class="series-summary-wrap"]/section/@data-series-id').extract()
-        # # TODO: Remove the slicing in for loop
-        # for each_series_id in series_ids[:2]:
-        #     yield scrapy.Request(f'www.espncricinfo.com/ci/engine/match/index/series.html?series={each_series_id}', callback=self.parse_bilateral_series)
 
     def parse_bilateral_series(self, response):
-        self.logger.info(f'Received BILATERAL-SERIES response for the url: {response.url}')
-        all_match_series_match_id_tuples = response.xpath('//*[@class="match-articles"]/a[contains(text(), "Scorecard")]/@href').extract()
-        for each_scorecard_link in all_match_series_match_id_tuples:
-            # TODO: Replace the below with call to the rest API for extracting the pages
-            series_match_tuple = re.search(r'.*series\/(\d+)\/scorecard\/(\d+)\/.*', each_scorecard_link).groups()
-            self.logger.info('Series: {} Match: {} Link: {}'.format(series_match_tuple[0], series_match_tuple[1], each_scorecard_link))
+        received_meta_data = response.meta.get('series_id', 'Unknown')
+        self.logger.info(f'Received response for BILATERAL-SERIES: {received_meta_data} from url: {response.url}')
+        event_ids = response.xpath('//*[@class="match-articles"]/a[contains(text(), "Scorecard")]/@href').re(r'.*series\/\d+\/scorecard\/(\d+)\/.*')
+        for each_event_id in event_ids:
+            url = f'http://site.web.api.espn.com/apis/site/v2/sports/cricket/{received_meta_data}/playbyplay?contentorigin=espn&event={each_event_id}&page=1&period=1&section=cricinfo'
+            self.logger.info(f'Series: {received_meta_data} Event: {each_event_id} Link: {url}')
+            #TODO Remove the if to get the data of all the events
+            interested_event_id = '1119546'
+            if each_event_id == interested_event_id:
+                match_info = MatchInfo(int(received_meta_data), int(each_event_id))
+                match_info.get_innings_commentry('1')
