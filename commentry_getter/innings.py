@@ -74,7 +74,11 @@ class MatchInfo:
     def get_innings_commentry(self, innings_id):
         for each_page_num in range(self.get_num_pages(innings_id)):
             response = self.get_commentry_page(innings_id, each_page_num)
-            logger.info(response['commentary'].keys())
+            logger.info('Innings: {} Data: {}'.format(innings_id, response['commentary'].keys()))
+
+    def get_event_commentary(self):
+        for each_inning in ['1', '2']:
+            self.get_innings_commentry(each_inning)
 
 
 # def get_innings_data(series_id, match_id):

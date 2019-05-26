@@ -11,7 +11,7 @@ import re
 from scrapy.spidermiddlewares.httperror import HttpError
 from twisted.internet.error import DNSLookupError
 from twisted.internet.error import TimeoutError, TCPTimedOutError
-from commentry_getter.innings import MatchInfo
+from commentry_getter.innings import MatchInfo, MatchType
 
 class ExtractMatchScoreSpider(CrawlSpider):
     name = 'extract_match_score'
@@ -85,11 +85,19 @@ class ExtractMatchScoreSpider(CrawlSpider):
         received_meta_data = response.meta.get('series_id', 'Unknown')
         self.logger.info(f'Received response for BILATERAL-SERIES: {received_meta_data} from url: {response.url}')
         event_ids = response.xpath('//*[@class="match-articles"]/a[contains(text(), "Scorecard")]/@href').re(r'.*series\/\d+\/scorecard\/(\d+)\/.*')
-        for each_event_id in event_ids:
-            url = f'http://site.web.api.espn.com/apis/site/v2/sports/cricket/{received_meta_data}/playbyplay?contentorigin=espn&event={each_event_id}&page=1&period=1&section=cricinfo'
-            self.logger.info(f'Series: {received_meta_data} Event: {each_event_id} Link: {url}')
-            #TODO Remove the if to get the data of all the events
-            interested_event_id = '1119546'
-            if each_event_id == interested_event_id:
-                match_info = MatchInfo(int(received_meta_data), int(each_event_id))
-                match_info.get_innings_commentry('1')
+
+        #Extract the Event information for the item loader
+        for each_selector in response.xpath('//*/section[@class="matches-day-block"]/section'):
+            event_loader = ItemLoader(item=ExtractScoresItem(), 
+                                selector=each_selector)
+            event_loader.default_output_processor = TakeFirst()
+            event_loader.add_xpath('event_location_info', './div[@class="match-info"]/span[@class="match-no"]/a/text()')
+            event_loader.add_xpath('event_date', './div[@class="match-info"]/span[@class="bold"]/text()')
+            event_loader.add_xpath('event_first_participant', './div[@class="innings-info-1"]/text()')
+            event_loader.add_xpath('event_second_participant', './div[@class="innings-info-2"]/text()')
+            event_loader.add_xpath('event_id', 
+                                './*[@class="match-articles"]/a[contains(text(), "Scorecard")]/@href', 
+                                re=r'.*series\/\d+\/scorecard\/(\d+)\/.*')
+            event_loader.add_value('series_id', [received_meta_data])
+            yield event_loader.load_item()
+

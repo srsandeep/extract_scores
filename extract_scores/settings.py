@@ -64,9 +64,9 @@ CONCURRENT_REQUESTS = 1
 
 # Configure item pipelines
 # See https://doc.scrapy.org/en/latest/topics/item-pipeline.html
-#ITEM_PIPELINES = {
-#    'extract_scores.pipelines.ExtractScoresPipeline': 300,
-#}
+ITEM_PIPELINES = {
+   'extract_scores.pipelines.ExtractScoresPipeline': 100,
+}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://doc.scrapy.org/en/latest/topics/autothrottle.html

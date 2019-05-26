@@ -6,13 +6,19 @@
 # https://doc.scrapy.org/en/latest/topics/items.html
 
 import scrapy
+from scrapy.loader.processors import TakeFirst, MapCompose
+
+def remove_newlines_and_strip(input_str):
+    return input_str.replace('\n', ' ').strip()
 
 
 class ExtractScoresItem(scrapy.Item):
     # define the fields for your item here like:
-    match_type = scrapy.Field()
-    match_date = scrapy.Field()
-    location_info = scrapy.Field()
-    match_scorecard_link = scrapy.Field()
-    match_first_inning_participant = scrapy.Field()
-    match_second_inning_participant = scrapy.Field()
+    series_id = scrapy.Field()
+    event_id = scrapy.Field()
+    event_type = scrapy.Field()
+    event_date = scrapy.Field(input_processor = MapCompose(remove_newlines_and_strip))
+    event_location_info = scrapy.Field(input_processor = MapCompose(remove_newlines_and_strip))
+    event_scorecard_link = scrapy.Field()
+    event_first_participant = scrapy.Field(input_processor = MapCompose(remove_newlines_and_strip))
+    event_second_participant = scrapy.Field(input_processor = MapCompose(remove_newlines_and_strip))
