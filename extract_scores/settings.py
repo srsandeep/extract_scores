@@ -66,6 +66,7 @@ CONCURRENT_REQUESTS = 1
 # See https://doc.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
    'extract_scores.pipelines.ExtractScoresPipeline': 100,
+   'commentry_getter.comm_elements.EventCommentary': 200,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)

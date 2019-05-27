@@ -12,6 +12,8 @@ from scrapy.spidermiddlewares.httperror import HttpError
 from twisted.internet.error import DNSLookupError
 from twisted.internet.error import TimeoutError, TCPTimedOutError
 from commentry_getter.innings import MatchInfo, MatchType
+import os
+import json
 
 class ExtractMatchScoreSpider(CrawlSpider):
     name = 'extract_match_score'
@@ -43,30 +45,42 @@ class ExtractMatchScoreSpider(CrawlSpider):
 
     def parse_series_html(self, response):
         self.logger.info(f'Received ALL-YEARS response for the url: {response.url}')
-        series_years = response.xpath('//*[@class="season-links"]/a/text()').extract()
-        year_links = response.xpath('//*[@class="season-links"]/a/@href').getall()
-        url = "http://www.espncricinfo.com"
-        for idx, each_link in enumerate(year_links):
-            # TODO: Remove the 2018 if clause after debug
-            if series_years[idx] == '2018':
-                self.logger.info(f'Retriving the data for series year: {series_years[idx]} from ' + urllib.parse.urljoin(url, each_link))
-                my_app_metadata = dict()
-                my_app_metadata['series_year'] = series_years[idx]
-                yield scrapy.Request(url=urllib.parse.urljoin(url, each_link), 
-                                    callback=self.parse_yearly_series, 
-                                    errback=self.scrapy_error_callback,
-                                    meta=my_app_metadata)
+        self.config_dir = os.environ.get('EXTRACT_MATCH_SCORE_ENVIRON', os.getcwd())
+        self.config_file_path = os.path.join(self.config_dir, 'config.json')
+        if os.path.exists(self.config_file_path):
+            self.config_data = dict()
+            with open(self.config_file_path, 'r') as fp:
+                self.config_data = json.load(fp)
+            series_years = response.xpath('//*[@class="season-links"]/a/text()').extract()
+            year_links = response.xpath('//*[@class="season-links"]/a/@href').getall()
+            url = "http://www.espncricinfo.com"
+            for idx, each_link in enumerate(year_links):
+
+                if 'years_of_interest' in self.config_data and \
+                            series_years[idx].split('/')[0] in self.config_data['years_of_interest']:
+
+                    self.logger.info(f'Retriving the data for series year: {series_years[idx]} from ' + urllib.parse.urljoin(url, each_link))
+                    my_app_metadata = dict()
+                    my_app_metadata['series_year'] = series_years[idx]
+                    yield scrapy.Request(url=urllib.parse.urljoin(url, each_link), 
+                                        callback=self.parse_yearly_series, 
+                                        errback=self.scrapy_error_callback,
+                                        meta=my_app_metadata)
+        else:
+            self.logger.error(f'Config file Not found! Config Dir: {self.config_dir}')
 
 
     def parse_yearly_series(self, response):
         received_meta_data = response.meta.get('series_year', 'Unknown')
         self.logger.info(f'Received YEARLY-SERIES for year: {received_meta_data} response for the url: {response.url}')
-        #TODO: Enhance the logic to include T20 Mens, Tests Mens
+
         series_categories = response.xpath('//*[@class="match-section-head"]/h2/text()').extract()
         for idx, each_series_category in enumerate(series_categories):
-            if each_series_category == 'One-Day Internationals':
+            self.logger.info('Examining the event type {}'.format(each_series_category))
+            if each_series_category in self.config_data['event_type']:
                 odi_selectors = response.xpath('//*[@class="series-summary-wrap"]')[idx]
                 series_ids = odi_selectors.xpath('./section/@data-series-id').extract()
+                self.logger.info('Series IDs : {}'.format(series_ids))
                 for each_series_id in series_ids:
                     my_app_metadata = dict()
                     my_app_metadata['series_id'] = each_series_id
@@ -84,7 +98,6 @@ class ExtractMatchScoreSpider(CrawlSpider):
     def parse_bilateral_series(self, response):
         received_meta_data = response.meta.get('series_id', 'Unknown')
         self.logger.info(f'Received response for BILATERAL-SERIES: {received_meta_data} from url: {response.url}')
-        event_ids = response.xpath('//*[@class="match-articles"]/a[contains(text(), "Scorecard")]/@href').re(r'.*series\/\d+\/scorecard\/(\d+)\/.*')
 
         #Extract the Event information for the item loader
         for each_selector in response.xpath('//*/section[@class="matches-day-block"]/section'):
