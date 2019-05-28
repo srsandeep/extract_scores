@@ -19,11 +19,18 @@ class ExtractMatchScoreSpider(CrawlSpider):
     name = 'extract_match_score'
 
     def start_requests(self):
-        start_urls = ['http://www.espncricinfo.com/ci/engine/series/index.html']
+        start_urls = ['http://www.espncricinfo.com/ci/engine/series/index.html', 'http://www.espncricinfo.com/story/_/id/18791072/all-cricket-teams-index']
         for url in start_urls:
-            yield scrapy.Request(url=url, 
-                                callback=self.parse_series_html, 
-                                errback=self.scrapy_error_callback)
+            if 'index.html' in url:
+                yield scrapy.Request(url=url, 
+                                    callback=self.parse_series_html, 
+                                    errback=self.scrapy_error_callback)
+            elif 'all-cricket-teams-index' in url:
+                yield scrapy.Request(url=url, 
+                                    callback=self.parse_teams_html, 
+                                    errback=self.scrapy_error_callback)
+            else:
+                pass
 
     
     def scrapy_error_callback(self, failure):
@@ -34,13 +41,16 @@ class ExtractMatchScoreSpider(CrawlSpider):
             self.logger.error(f'HttpError on {response.url}')
 
 
-    def parse_item(self, response):
-        item = {}
-        self.logger.info(f'I am inside {response.url}')
-        #item['domain_id'] = response.xpath('//input[@id="sid"]/@value').get()
-        #item['name'] = response.xpath('//div[@id="name"]').get()
-        #item['description'] = response.xpath('//div[@id="description"]').get()
-        return item
+    def parse_teams_html(self, response):
+        self.logger.info(f'Response from all-teams-index url received')
+        teams_df = pd.DataFrame()
+        for each_sel in response.xpath('//*[@id="article-feed"]/article/div/div/p'):
+            team_id_name_list = each_sel.xpath('./a/@href').re(r'.*id\/(\d+)\/([a-z\-]+).*')
+            if len(team_id_name_list) == 2:
+                team_dict = {'id': team_id_name_list[0],
+                            'name': team_id_name_list[1]}
+                teams_df = teams_df.append(team_dict, ignore_index=True)
+        teams_df.to_json('/tmp/teams.json')
 
 
     def parse_series_html(self, response):
@@ -86,12 +96,12 @@ class ExtractMatchScoreSpider(CrawlSpider):
                     my_app_metadata['series_id'] = each_series_id
 
                     #TODO Remove the if to get the data of all the series
-                    interested_series_id = '12032'
-                    if each_series_id == interested_series_id:
-                        yield scrapy.Request(url = f'http://www.espncricinfo.com/ci/engine/match/index/series.html?series={each_series_id}', 
-                                            callback=self.parse_bilateral_series,
-                                            errback=self.scrapy_error_callback,
-                                            meta=my_app_metadata)
+                    # interested_series_id = '12032'
+                    # if each_series_id == interested_series_id:
+                    yield scrapy.Request(url = f'http://www.espncricinfo.com/ci/engine/match/index/series.html?series={each_series_id}', 
+                                        callback=self.parse_bilateral_series,
+                                        errback=self.scrapy_error_callback,
+                                        meta=my_app_metadata)
                 break
 
 
