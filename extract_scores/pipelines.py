@@ -21,9 +21,11 @@ class ExtractScoresPipeline(object):
 
     def process_item(self, item, spider):
         item['event_type'] = self.map_event_name_to_type(item['event_location_info'])
-        item['event_scorecard_link'] = 'http://site.web.api.espn.com/apis/site/v2/sports/cricket/{}/playbyplay?contentorigin=espn&event={}&page=100&period=1&section=cricinfo'.format(item['series_id'], item['event_id'])
 
-        match_info = MatchInfo(int(item['series_id']), int(item['event_id']))
-        match_info.get_event_commentary()
+        if 'event_id' in item and item['event_id'] is not None:
+            item['event_scorecard_link'] = 'http://site.web.api.espn.com/apis/site/v2/sports/cricket/{}/playbyplay?contentorigin=espn&event={}&page=100&period=1&section=cricinfo'.format(item['series_id'], item['event_id'])
+
+            # match_info = MatchInfo(int(item['series_id']), int(item['event_id']))
+            # match_info.get_event_commentary()
 
         return item
